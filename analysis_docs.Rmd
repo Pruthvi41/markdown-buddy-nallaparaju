@@ -1,0 +1,101 @@
+---
+title: "sales_summary.R — Script Documentation"
+author: "Pruthvi Raju Nallaparaju"
+date: "2026-10-12"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+> **AI Assistance Declaration:** I used Claude (Claude Sonnet 5, Anthropic, accessed via claude.ai) on October 12, 2026 to suggest this document's section structure (`# Purpose`, `## Inputs`, `## Outputs`) and code-chunk formatting. Prompts used: see `Appendix_AIPrompts.md`. I verified outputs by actually knitting this file with `rmarkdown::render()` and confirming every chunk executes without error and reproduces the same numbers as running `scripts/sales_summary.R` directly. All code and calculations are my own; the AI's role was limited to documentation formatting. I am responsible for the accuracy and originality of this work.
+
+# Purpose
+
+`scripts/sales_summary.R` summarizes one month of (synthetic) retail order
+data for a small coffee-and-goods shop. It answers a single business
+question — **which product category drives the most revenue?** — by
+computing total revenue, per-category revenue, order counts, and average
+order value, then saving a summary table and a bar chart.
+
+## Inputs
+
+| File | Description |
+|---|---|
+| `data/retail_orders.csv` | 60 synthetic orders for September 2026. Columns: `order_id`, `order_date`, `category` (Coffee / Tea / Pastries / Merchandise), `quantity`, `unit_price`, `region`. |
+
+```{r load-data}
+orders <- read.csv("data/retail_orders.csv", stringsAsFactors = FALSE)
+orders$order_date <- as.Date(orders$order_date)
+str(orders)
+```
+
+## Outputs
+
+| File | Description |
+|---|---|
+| `output/category_summary.csv` | Revenue, order count, and average order value per category, sorted highest revenue first. |
+| `output/revenue_by_category.png` | Bar chart of revenue by category. |
+
+The script also prints total revenue and the top-performing category to the
+console.
+
+# Walkthrough
+
+### 1. Compute each order's line total
+
+```{r line-total}
+orders$line_total <- orders$quantity * orders$unit_price
+total_revenue <- sum(orders$line_total)
+sprintf("Total revenue: $%.2f across %d orders", total_revenue, nrow(orders))
+```
+
+### 2. Aggregate by category
+
+```{r aggregate}
+category_summary <- aggregate(
+  line_total ~ category, data = orders,
+  FUN = function(x) c(revenue = sum(x), orders = length(x), avg_order = mean(x))
+)
+category_summary <- do.call(data.frame, category_summary)
+names(category_summary) <- c("category", "revenue", "orders", "avg_order_value")
+category_summary$revenue <- round(category_summary$revenue, 2)
+category_summary$avg_order_value <- round(category_summary$avg_order_value, 2)
+category_summary <- category_summary[order(-category_summary$revenue), ]
+knitr::kable(category_summary, row.names = FALSE)
+```
+
+### 3. Identify the top category
+
+```{r top-category}
+sprintf("Top-performing category: %s ($%.2f)",
+        category_summary$category[1], category_summary$revenue[1])
+```
+
+### 4. Chart
+
+```{r chart, fig.width=7, fig.height=4.5}
+bp <- barplot(
+  category_summary$revenue,
+  names.arg = category_summary$category,
+  col = "#1F4E78", border = NA,
+  main = "September 2026 Revenue by Category",
+  ylab = "Revenue ($)",
+  ylim = c(0, max(category_summary$revenue) * 1.15)
+)
+text(bp, category_summary$revenue,
+     labels = sprintf("$%.0f", category_summary$revenue),
+     pos = 3, cex = 0.9)
+```
+
+# Verification
+
+This document was knit end-to-end with `rmarkdown::render()`; every number
+in the tables and text above is the live output of the code chunks in
+*this* file, re-computed at knit time — not copied from the console output
+quoted in `README.md`. Both were cross-checked against each other and
+matched exactly.
